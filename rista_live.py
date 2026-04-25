@@ -204,7 +204,7 @@ print("✅ Connected to Google Sheet")
 
 def push(sheet_name, df):
     try:
-        print(f"\n📤 Updating sheet: {Sales_Dashboard}")
+        print(f"\n📤 Updating sheet: {Sales Dashboard}")
 
         # Try opening sheet
         try:
