@@ -204,22 +204,17 @@ print("✅ Connected to Google Sheet")
 
 def push(sheet_name, df):
     try:
-        print(f"\n📤 Updating sheet: {Sales Dashboard}")
+        print(f"\n📤 Updating sheet: {sheet_name}")
 
-        # Try opening sheet
         try:
             ws = spreadsheet.worksheet(sheet_name)
         except:
-            print(f"⚠️ Sheet '{sheet_name}' not found → creating new one")
+            print(f"⚠️ Creating sheet: {sheet_name}")
             ws = spreadsheet.add_worksheet(title=sheet_name, rows="1000", cols="20")
 
-        # Clean data
         df = df.fillna("").astype(str)
 
-        # Clear old data
         ws.clear()
-
-        # Upload new data
         ws.update(
             [df.columns.tolist()] + df.values.tolist(),
             value_input_option="USER_ENTERED"
