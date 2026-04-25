@@ -28,6 +28,12 @@ def headers():
 
 # ---------------- GOOGLE ---------------- #
 
+import json
+import os
+import gspread
+from google.oauth2.service_account import Credentials
+
+# 🔐 Load credentials (NO CHANGE)
 creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
 
 creds = Credentials.from_service_account_info(
@@ -39,7 +45,13 @@ creds = Credentials.from_service_account_info(
 )
 
 client = gspread.authorize(creds)
-spreadsheet = client.open("Sales Dashboard")
+
+# 🔥 CHANGE ONLY THIS LINE ↓
+spreadsheet = client.open_by_url(
+    "https://docs.google.com/spreadsheets/d/1CVUS-BSBfDIoQI4Yk2GB4_Zp1CIJRF-9YRfpvCih-FM/edit"
+)
+
+print("✅ Connected to NEW Google Sheet")
 
 # ---------------- FETCH BRANCH ---------------- #
 
@@ -123,13 +135,70 @@ summary = pd.DataFrame({
 
 # ---------------- GSHEET ---------------- #
 
+# ---------------- GOOGLE SHEETS SETUP ---------------- #
+
+import gspread
+from google.oauth2.service_account import Credentials
+import json
+import os
+
+# 🔐 Load credentials from GitHub Secret
+creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
+
+creds = Credentials.from_service_account_info(
+    creds_dict,
+    scopes=[
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+)
+
+client = gspread.authorize(creds)
+
+# 👉 ADD YOUR GOOGLE SHEET LINK HERE
+spreadsheet = client.open_by_url(
+    "https://docs.google.com/spreadsheets/d/XXXXXXXXXXXX/edit"
+)
+
+print("✅ Connected to Google Sheet")
+
+
+# ---------------- PUSH FUNCTION ---------------- #
+
 def push(sheet_name, df):
-    ws = spreadsheet.worksheet(sheet_name)
-    ws.clear()
-    df = df.fillna("").astype(str)
-    ws.update([df.columns.tolist()] + df.values.tolist())
+    try:
+        print(f"\n📤 Updating sheet: {Sales_Dashboard}")
+
+        # Try opening sheet
+        try:
+            ws = spreadsheet.worksheet(sheet_name)
+        except:
+            print(f"⚠️ Sheet '{sheet_name}' not found → creating new one")
+            ws = spreadsheet.add_worksheet(title=sheet_name, rows="1000", cols="20")
+
+        # Clean data
+        df = df.fillna("").astype(str)
+
+        # Clear old data
+        ws.clear()
+
+        # Upload new data
+        ws.update(
+            [df.columns.tolist()] + df.values.tolist(),
+            value_input_option="USER_ENTERED"
+        )
+
+        print(f"✅ {sheet_name} updated | Rows: {len(df)}")
+
+    except Exception as e:
+        print(f"❌ Error updating {sheet_name}: {e}")
+
+
+# ---------------- PUSH DATA ---------------- #
+
+print("\n📊 Pushing data to Google Sheets...")
 
 push("Summary", summary)
 push("Raw Data", today_df)
 
-print("✅ Live Data Updated")
+print("\n🎉 Google Sheet Update Completed Successfully")
