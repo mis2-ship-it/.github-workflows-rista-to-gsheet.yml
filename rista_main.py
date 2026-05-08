@@ -111,43 +111,30 @@ def rista_get(endpoint, params=None):
 def fetch_all_data():
 
     endpoint_map = {
+
         "sales_summary": {
             "endpoint": "/analytics/custom/sales/summary",
-            headers=headers(),
-            params=params,
-            timeout=20
-            }
+            "params": {}
         },
 
         "discount_transactions": {
             "endpoint": "/analytics/discount/transactions",
-            headers=headers(),
-            params=params,
-            timeout=20
-            }
+            "params": {}
         },
 
         "soldout_history": {
             "endpoint": "/items/soldout/history",
-            headers=headers(),
-            params=params,
-            timeout=20
-            }
+            "params": {}
         },
 
         "inventory_items": {
             "endpoint": "/inventory/items",
-            headers=headers(),
-            params=params,
-            timeout=20
-            }
+            "params": {}
         },
 
         "outofstock": {
             "endpoint": "/sale/item/outofstock",
-            headers=headers(),
-            params=params,
-            timeout=20
+            "params": {}
         }
     }
 
