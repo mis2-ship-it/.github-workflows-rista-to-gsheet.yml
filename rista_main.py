@@ -11,21 +11,26 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 
-# =========================
+# =========================================================
 # CONFIG
-# =========================
+# =========================================================
 
 RISTA_BASE_URL = "https://api.ristaapps.com/v1"
+
 RISTA_API_KEY = os.getenv("API_KEY", "")
 
 RISTA_HEADERS = {
-    "X-API-KEY": RISTA_API_KEY,
+    "api_key": RISTA_API_KEY,
     "Content-Type": "application/json",
     "Accept": "application/json"
 }
 
 GOOGLE_SHEET_ID = "12oI9rtQreA0XI5eTiLZEgc2TVPm9DRgbf2TXTArEpBY"
-GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+
+GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv(
+    "GOOGLE_SERVICE_ACCOUNT_JSON",
+    ""
+)
 
 EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
@@ -33,22 +38,27 @@ EMAIL_USER = os.getenv("EMAIL_USER", "")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
 EMAIL_TO = os.getenv("EMAIL_TO", "")
 
-
 TIMEOUT_SECONDS = 60
 
 
-# =========================
+# =========================================================
 # HELPERS
-# =========================
+# =========================================================
 
 def log(message):
-    current_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    current_ts = datetime.now(
+        timezone.utc
+    ).strftime("%Y-%m-%d %H:%M:%S UTC")
+
     print(f"[{current_ts}] {message}")
 
 
 def parse_json_response(response):
+
     try:
         return response.json()
+
     except Exception:
         return {"raw_text": response.text}
 
@@ -63,19 +73,12 @@ def normalize_to_dataframe(data):
 
     if isinstance(data, dict):
 
-        for key in ["data", "results", "items", "records", "response"]:
-            if key in data and isinstance(data[key], list):
-                return pd.json_normalize(data[key])
+        if "data" in data:
+            return pd.json_normalize(data["data"])
 
         return pd.json_normalize(data)
 
     return pd.DataFrame()
-
-
-def safe_string(value):
-    if value is None:
-        return ""
-    return str(value)
 
 
 def truncate_sheet_rows(df, max_rows=5000):
@@ -86,17 +89,15 @@ def truncate_sheet_rows(df, max_rows=5000):
     return df
 
 
-# =========================
+# =========================================================
 # RISTA API
-# =========================
+# =========================================================
 
 def rista_get(endpoint, params=None):
 
     url = RISTA_BASE_URL + endpoint
 
     log(f"Calling {url}")
-
-    log(f"Using API KEY: {RISTA_API_KEY[:10]}...")
 
     response = requests.get(
         url,
@@ -105,84 +106,16 @@ def rista_get(endpoint, params=None):
         timeout=TIMEOUT_SECONDS
     )
 
+    log(f"Status Code: {response.status_code}")
+
     response.raise_for_status()
 
     return parse_json_response(response)
 
 
-def fetch_all_data():
-
-    endpoint_map = {
-
-        "sales_summary": {
-            "endpoint": "/analytics/custom/sales/summary",
-            "params": {}
-        },
-
-        "discount_transactions": {
-            "endpoint": "/analytics/discount/transactions",
-            "params": {}
-        },
-
-        "soldout_history": {
-            "endpoint": "/items/soldout/history",
-            "params": {}
-        },
-
-        "inventory_items": {
-            "endpoint": "/inventory/items",
-            "params": {}
-        },
-
-        "outofstock": {
-            "endpoint": "/sale/item/outofstock",
-            "params": {}
-        }
-    }
-
-    collected = {}
-
-    for name, config in endpoint_map.items():
-
-        try:
-
-            result_json = rista_get(
-                config["endpoint"],
-                config["params"]
-            )
-
-            df = normalize_to_dataframe(result_json)
-
-            df["source_endpoint"] = config["endpoint"]
-
-            df["fetched_at_utc"] = datetime.now(
-                timezone.utc
-            ).strftime("%Y-%m-%d %H:%M:%S")
-
-            collected[name] = {
-                "json": result_json,
-                "df": df
-            }
-
-            log(f"{name} fetched successfully")
-
-        except Exception as e:
-
-            log(f"{name} failed: {e}")
-
-            collected[name] = {
-                "json": {"error": str(e)},
-                "df": pd.DataFrame([{
-                    "error": str(e)
-                }])
-            }
-
-    return collected
-
-
-# =========================
+# =========================================================
 # GOOGLE SHEETS
-# =========================
+# =========================================================
 
 def get_gspread_client():
 
@@ -191,7 +124,9 @@ def get_gspread_client():
         "https://www.googleapis.com/auth/drive"
     ]
 
-    credentials_info = json.loads(GOOGLE_SERVICE_ACCOUNT_JSON)
+    credentials_info = json.loads(
+        GOOGLE_SERVICE_ACCOUNT_JSON
+    )
 
     credentials = Credentials.from_service_account_info(
         credentials_info,
@@ -207,6 +142,7 @@ def get_or_create_worksheet(spreadsheet, title):
         worksheet = spreadsheet.worksheet(title)
 
     except Exception:
+
         worksheet = spreadsheet.add_worksheet(
             title=title,
             rows="2000",
@@ -216,18 +152,29 @@ def get_or_create_worksheet(spreadsheet, title):
     return worksheet
 
 
-def upload_dataframe_to_worksheet(spreadsheet, sheet_name, df):
+def upload_dataframe_to_worksheet(
+    spreadsheet,
+    sheet_name,
+    df
+):
 
-    worksheet = get_or_create_worksheet(spreadsheet, sheet_name)
+    worksheet = get_or_create_worksheet(
+        spreadsheet,
+        sheet_name
+    )
 
     df = truncate_sheet_rows(df)
 
     if df.empty:
-        df = pd.DataFrame([{"message": "No data"}])
+        df = pd.DataFrame([{
+            "message": "No Data"
+        }])
 
     df = df.fillna("")
 
-    records = [df.columns.tolist()] + df.astype(str).values.tolist()
+    records = [
+        df.columns.tolist()
+    ] + df.astype(str).values.tolist()
 
     worksheet.clear()
 
@@ -238,64 +185,153 @@ def upload_dataframe_to_worksheet(spreadsheet, sheet_name, df):
     )
 
 
-def update_google_sheets(collected):
+# =========================================================
+# HELP SHEET STORE MAPPING
+# =========================================================
 
-    gc = get_gspread_client()
+def get_help_sheet_mapping(spreadsheet):
 
-    spreadsheet = gc.open_by_key(GOOGLE_SHEET_ID)
+    worksheet = spreadsheet.worksheet("Help")
 
-    for sheet_name, payload in collected.items():
+    data = worksheet.get_all_records()
 
-        upload_dataframe_to_worksheet(
-            spreadsheet,
-            sheet_name,
-            payload["df"]
-        )
+    help_df = pd.DataFrame(data)
 
-    summary_df = build_summary_dataframe(collected)
+    log(f"Help Sheet Rows: {len(help_df)}")
 
-    upload_dataframe_to_worksheet(
-        spreadsheet,
-        "dashboard_summary",
-        summary_df
+    return help_df
+
+
+# =========================================================
+# FETCH BRANCHES
+# =========================================================
+
+def fetch_branch_list():
+
+    result = rista_get("/branch/list")
+
+    df = normalize_to_dataframe(result)
+
+    return df
+
+
+# =========================================================
+# FILTER BRANCHES
+# =========================================================
+
+def filter_mapped_branches(
+    branch_df,
+    help_df
+):
+
+    if help_df.empty:
+        return branch_df
+
+    help_stores = help_df["Store_Name"].astype(str).str.strip()
+
+    branch_df["branchName"] = (
+        branch_df["branchName"]
+        .astype(str)
+        .str.strip()
     )
 
-    return summary_df
+    filtered_df = branch_df[
+        branch_df["branchName"].isin(help_stores)
+    ]
+
+    log(f"Mapped Stores: {len(filtered_df)}")
+
+    return filtered_df
 
 
-# =========================
+# =========================================================
+# SOLDOUT HISTORY
+# =========================================================
+
+def fetch_soldout_history(branch_name):
+
+    try:
+
+        result = rista_get(
+            "/items/soldout/history"
+        )
+
+        df = normalize_to_dataframe(result)
+
+        df["branchName"] = branch_name
+
+        return df
+
+    except Exception as e:
+
+        log(f"Soldout failed for {branch_name}: {e}")
+
+        return pd.DataFrame()
+
+
+# =========================================================
+# INVENTORY STOCK
+# =========================================================
+
+def fetch_inventory_stock(branch_name):
+
+    try:
+
+        result = rista_get(
+            "/inventory/item/stock"
+        )
+
+        df = normalize_to_dataframe(result)
+
+        df["branchName"] = branch_name
+
+        return df
+
+    except Exception as e:
+
+        log(f"Inventory failed for {branch_name}: {e}")
+
+        return pd.DataFrame()
+
+
+# =========================================================
 # SUMMARY
-# =========================
+# =========================================================
 
-def safe_count(df):
+def build_summary_dataframe(
+    branch_df,
+    soldout_df,
+    inventory_df
+):
 
-    if df is None or df.empty:
-        return 0
+    summary = pd.DataFrame([{
 
-    return len(df)
+        "Run Time UTC":
+            datetime.now(
+                timezone.utc
+            ).strftime("%Y-%m-%d %H:%M:%S"),
+
+        "Total Stores":
+            len(branch_df),
+
+        "Soldout Records":
+            len(soldout_df),
+
+        "Inventory Records":
+            len(inventory_df)
+
+    }])
+
+    return summary
 
 
-def build_summary_dataframe(collected):
-
-    summary_data = []
-
-    for name, payload in collected.items():
-
-        summary_data.append({
-            "dataset": name,
-            "rows": safe_count(payload["df"])
-        })
-
-    return pd.DataFrame(summary_data)
-
-
-# =========================
+# =========================================================
 # EMAIL HTML
-# =========================
+# =========================================================
 
 def dataframe_to_html_table(df, max_rows=20):
 
-    if df is None or df.empty:
+    if df.empty:
         return "<p>No Data</p>"
 
     return df.head(max_rows).to_html(
@@ -304,115 +340,213 @@ def dataframe_to_html_table(df, max_rows=20):
     )
 
 
-def build_email_html(collected, summary_df):
+def build_email_html(
+    summary_df,
+    soldout_df,
+    inventory_df
+):
 
     html = f"""
     <html>
+
     <body style="font-family: Arial;">
 
-    <h2>Rista Hourly Report</h2>
+    <h2>Rista Hourly Automation</h2>
 
     <h3>Summary</h3>
 
     {dataframe_to_html_table(summary_df)}
 
-    <h3>Sales Summary</h3>
-
-    {dataframe_to_html_table(collected["sales_summary"]["df"])}
-
-    <h3>Discount Transactions</h3>
-
-    {dataframe_to_html_table(collected["discount_transactions"]["df"])}
-
     <h3>Soldout History</h3>
 
-    {dataframe_to_html_table(collected["soldout_history"]["df"])}
+    {dataframe_to_html_table(soldout_df)}
 
-    <h3>Inventory Items</h3>
+    <h3>Inventory Stock</h3>
 
-    {dataframe_to_html_table(collected["inventory_items"]["df"])}
-
-    <h3>Out Of Stock</h3>
-
-    {dataframe_to_html_table(collected["outofstock"]["df"])}
+    {dataframe_to_html_table(inventory_df)}
 
     </body>
+
     </html>
     """
 
     return html
 
 
-# =========================
+# =========================================================
 # EMAIL SEND
-# =========================
+# =========================================================
 
 def send_email(
     subject,
-    html_body,
-    recipients,
-    smtp_host,
-    smtp_port,
-    smtp_user,
-    smtp_password
+    html_body
 ):
 
-    if isinstance(recipients, str):
-        recipients = [
-            item.strip()
-            for item in recipients.split(",")
-            if item.strip()
-        ]
+    if not EMAIL_TO:
+        return
+
+    recipients = [
+        x.strip()
+        for x in EMAIL_TO.split(",")
+        if x.strip()
+    ]
 
     msg = MIMEMultipart("alternative")
 
     msg["Subject"] = subject
-    msg["From"] = smtp_user
+    msg["From"] = EMAIL_USER
     msg["To"] = ", ".join(recipients)
 
-    msg.attach(MIMEText(html_body, "html"))
+    msg.attach(
+        MIMEText(html_body, "html")
+    )
 
-    with smtplib.SMTP(smtp_host, smtp_port) as server:
+    with smtplib.SMTP(
+        EMAIL_HOST,
+        EMAIL_PORT
+    ) as server:
 
         server.starttls()
 
         server.login(
-            smtp_user,
-            smtp_password
+            EMAIL_USER,
+            EMAIL_PASSWORD
         )
 
         server.sendmail(
-            smtp_user,
+            EMAIL_USER,
             recipients,
             msg.as_string()
         )
 
 
-# =========================
+# =========================================================
 # MAIN
-# =========================
+# =========================================================
 
 def main():
 
     log("Starting automation")
 
-    all_data = fetch_all_data()
+    gc = get_gspread_client()
 
-    summary_df = update_google_sheets(all_data)
+    spreadsheet = gc.open_by_key(
+        GOOGLE_SHEET_ID
+    )
 
-    html_body = build_email_html(
-        all_data,
+    # =====================================================
+    # HELP SHEET
+    # =====================================================
+
+    help_df = get_help_sheet_mapping(
+        spreadsheet
+    )
+
+    # =====================================================
+    # BRANCH LIST
+    # =====================================================
+
+    branch_df = fetch_branch_list()
+
+    mapped_branch_df = filter_mapped_branches(
+        branch_df,
+        help_df
+    )
+
+    # =====================================================
+    # FETCH DATA
+    # =====================================================
+
+    soldout_frames = []
+
+    inventory_frames = []
+
+    for _, row in mapped_branch_df.iterrows():
+
+        branch_name = row.get(
+            "branchName",
+            ""
+        )
+
+        log(f"Processing {branch_name}")
+
+        soldout_df = fetch_soldout_history(
+            branch_name
+        )
+
+        inventory_df = fetch_inventory_stock(
+            branch_name
+        )
+
+        soldout_frames.append(
+            soldout_df
+        )
+
+        inventory_frames.append(
+            inventory_df
+        )
+
+    # =====================================================
+    # FINAL DATAFRAMES
+    # =====================================================
+
+    final_soldout_df = pd.concat(
+        soldout_frames,
+        ignore_index=True
+    ) if soldout_frames else pd.DataFrame()
+
+    final_inventory_df = pd.concat(
+        inventory_frames,
+        ignore_index=True
+    ) if inventory_frames else pd.DataFrame()
+
+    summary_df = build_summary_dataframe(
+        mapped_branch_df,
+        final_soldout_df,
+        final_inventory_df
+    )
+
+    # =====================================================
+    # UPLOAD TO SHEETS
+    # =====================================================
+
+    upload_dataframe_to_worksheet(
+        spreadsheet,
+        "branch_list",
+        mapped_branch_df
+    )
+
+    upload_dataframe_to_worksheet(
+        spreadsheet,
+        "soldout_history",
+        final_soldout_df
+    )
+
+    upload_dataframe_to_worksheet(
+        spreadsheet,
+        "inventory_stock",
+        final_inventory_df
+    )
+
+    upload_dataframe_to_worksheet(
+        spreadsheet,
+        "summary",
         summary_df
     )
 
+    # =====================================================
+    # EMAIL
+    # =====================================================
+
+    html_body = build_email_html(
+        summary_df,
+        final_soldout_df,
+        final_inventory_df
+    )
+
     send_email(
-        subject="Rista Hourly Report",
-        html_body=html_body,
-        recipients=EMAIL_TO,
-        smtp_host=EMAIL_HOST,
-        smtp_port=EMAIL_PORT,
-        smtp_user=EMAIL_USER,
-        smtp_password=EMAIL_PASSWORD
+        "Rista Hourly Automation",
+        html_body
     )
 
     log("Automation completed successfully")
