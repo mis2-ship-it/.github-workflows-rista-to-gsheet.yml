@@ -343,13 +343,8 @@ def build_summary_dataframe(collected):
 # EMAIL
 # =========================
 
-def dataframe_to_html_table(df, max_rows=20):
-    if df is None or df.empty:
-        return "<p>No data</p>"
-    return df.head(max_rows).to_html(index=False, border=1)
-
-
 def build_email_html(collected, summary_df):
+
     sales_df = collected["sales_summary"]["df"]
     discount_df = collected["discount_transactions"]["df"]
     soldout_df = collected["soldout_history"]["df"]
@@ -358,66 +353,86 @@ def build_email_html(collected, summary_df):
 
     summary_map = dict(zip(summary_df["metric"], summary_df["value"]))
 
-    html = """
+    html = f"""
     <html>
     <body style="font-family: Arial, sans-serif;">
+
         <h2>Rista Hourly Report</h2>
-        <p><b>Run Time UTC:</b> """ + safe_string(summary_map.get("run_time_utc")) + """</p>
-        <p><b>Restaurant Status:</b> """ + safe_string(summary_map.get("restaurant_status")) + """</p>
+
+        <p><b>Run Time UTC:</b> {safe_string(summary_map.get("run_time_utc"))}</p>
+
+        <p><b>Restaurant Status:</b> {safe_string(summary_map.get("restaurant_status"))}</p>
 
         <h3>Key Metrics</h3>
-        
-Metric	Value
-Total Inventory Items	""" + safe_string(summary_map.get("inventory_total_items")) + """
-Zero Stock Items	""" + safe_string(summary_map.get("inventory_zero_stock_items")) + """
-Low Stock Items	""" + safe_string(summary_map.get("inventory_low_stock_items")) + """
-Out of Stock Records	""" + safe_string(summary_map.get("outofstock_records")) + """
-Sold Out History Records	""" + safe_string(summary_map.get("soldout_history_records")) + """
-Discount Transactions	""" + safe_string(summary_map.get("discount_transaction_rows")) + """
-Estimated Cancellations	""" + safe_string(summary_map.get("estimated_cancellations")) + """
-text
 
+        <table border="1" cellpadding="5" cellspacing="0">
+            <tr>
+                <th>Metric</th>
+                <th>Value</th>
+            </tr>
 
-    <h3>Inventory Snapshot</h3>
-    """ + dataframe_to_html_table(inventory_df, 20) + """
+            <tr>
+                <td>Total Inventory Items</td>
+                <td>{safe_string(summary_map.get("inventory_total_items"))}</td>
+            </tr>
 
-    <h3>Sold Out History</h3>
-    """ + dataframe_to_html_table(soldout_df, 20) + """
+            <tr>
+                <td>Zero Stock Items</td>
+                <td>{safe_string(summary_map.get("inventory_zero_stock_items"))}</td>
+            </tr>
 
-    <h3>Out of Stock / Partial Acceptance</h3>
-    """ + dataframe_to_html_table(outofstock_df, 20) + """
+            <tr>
+                <td>Low Stock Items</td>
+                <td>{safe_string(summary_map.get("inventory_low_stock_items"))}</td>
+            </tr>
 
-    <h3>Discount Transactions</h3>
-    """ + dataframe_to_html_table(discount_df, 20) + """
+            <tr>
+                <td>Out of Stock Records</td>
+                <td>{safe_string(summary_map.get("outofstock_records"))}</td>
+            </tr>
 
-    <h3>Sales Summary</h3>
-    """ + dataframe_to_html_table(sales_df, 20) + """
+            <tr>
+                <td>Sold Out History Records</td>
+                <td>{safe_string(summary_map.get("soldout_history_records"))}</td>
+            </tr>
 
-    <p style="margin-top:20px;">
-        This is an automated hourly email from your Rista reporting workflow.
-    </p>
-</body>
-</html>
-"""
-return html
+            <tr>
+                <td>Discount Transactions</td>
+                <td>{safe_string(summary_map.get("discount_transaction_rows"))}</td>
+            </tr>
 
-# Send Email
-def send_email(subject, html_body, recipients, smtp_host, smtp_port, smtp_user, smtp_password):
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = smtp_user
-    msg["To"] = ", ".join(recipients)
+            <tr>
+                <td>Estimated Cancellations</td>
+                <td>{safe_string(summary_map.get("estimated_cancellations"))}</td>
+            </tr>
 
-    part = MIMEText(html_body, "html")
-    msg.attach(part)
+        </table>
 
-    with smtplib.SMTP(smtp_host, smtp_port) as server:
-        server.starttls()
-        server.login(smtp_user, smtp_password)
-        server.sendmail(smtp_user, recipients, msg.as_string())
-        smtp_server.quit()
+        <h3>Inventory Snapshot</h3>
+        {dataframe_to_html_table(inventory_df, 20)}
 
-log("Email sent successfully")
+        <h3>Sold Out History</h3>
+        {dataframe_to_html_table(soldout_df, 20)}
+
+        <h3>Out of Stock / Partial Acceptance</h3>
+        {dataframe_to_html_table(outofstock_df, 20)}
+
+        <h3>Discount Transactions</h3>
+        {dataframe_to_html_table(discount_df, 20)}
+
+        <h3>Sales Summary</h3>
+        {dataframe_to_html_table(sales_df, 20)}
+
+        <p style="margin-top:20px;">
+            This is an automated hourly email from your Rista reporting workflow.
+        </p>
+
+    </body>
+    </html>
+    """
+
+            return html
+
 # =========================
 # EMAIL SEND
 # =========================
