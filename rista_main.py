@@ -191,7 +191,7 @@ def upload_dataframe_to_worksheet(
 
 def get_help_sheet_mapping(spreadsheet):
 
-    worksheet = spreadsheet.worksheet("Help")
+    worksheet = spreadsheet.worksheet("Help Sheet")
 
     data = worksheet.get_all_records()
 
