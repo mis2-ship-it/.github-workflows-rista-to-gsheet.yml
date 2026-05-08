@@ -419,45 +419,51 @@ def send_email(subject, html_body, recipients, smtp_host, smtp_port, smtp_user, 
 
 log("Email sent successfully")
 # =========================
-#  MAIN
-#  =========================
+# EMAIL SEND
+# =========================
+
+def send_email(subject, html_body, recipients, smtp_host, smtp_port, smtp_user, smtp_password):
+    if isinstance(recipients, str):
+        recipients = [item.strip() for item in recipients.split(",") if item.strip()]
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = smtp_user
+    msg["To"] = ", ".join(recipients)
+
+    msg.attach(MIMEText(html_body, "html"))
+
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+        server.starttls()
+        server.login(smtp_user, smtp_password)
+        server.sendmail(smtp_user, recipients, msg.as_string())
+
+
+# =========================
+# MAIN
+# =========================
+
 def main():
-log("Starting Rista hourly automation")
+    log("Starting Rista hourly automation")
 
-text
+    all_data = fetch_all_data()
 
+    update_google_sheets(all_data)
 
-collected = fetch_all_data()
-summary_df = update_google_sheets(collected)
+    html_body = build_html_email(all_data)
 
-current_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-email_subject = "Rista Hourly Report - " + current_ts
-email_html = build_email_html(collected, summary_df)
+    send_email(
+        subject="Rista Hourly Report",
+        html_body=html_body,
+        recipients=EMAIL_TO,
+        smtp_host=SMTP_HOST,
+        smtp_port=SMTP_PORT,
+        smtp_user=SMTP_USER,
+        smtp_password=SMTP_PASSWORD
+    )
 
-send_email(email_subject, email_html)
-
-log("Workflow completed successfully")
-if name == "main":
-try:
-main()
-except Exception as main_error:
-log("Fatal error: " + str(main_error))
-traceback.print_exc()
-
-text
+    log("Rista hourly automation completed successfully")
 
 
-    try:
-        error_html = """
-        <html>
-        <body>
-            <h2>Rista Hourly Automation Failed</h2>
-            <p><b>Error:</b> """ + safe_string(main_error) + """</p>
-        </body>
-        </html>
-        """
-        send_email("Rista Hourly Automation Failed", error_html)
-    except Exception as email_error:
-        log("Could not send failure email: " + str(email_error))
-
-    raise
+if __name__ == "__main__":
+    main()
