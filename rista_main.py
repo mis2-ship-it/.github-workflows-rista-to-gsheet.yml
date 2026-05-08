@@ -33,9 +33,6 @@ EMAIL_USER = os.getenv("EMAIL_USER", "")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
 EMAIL_TO = os.getenv("EMAIL_TO", "")
 
-BUSINESS_ID = os.getenv("BUSINESS_ID", "")
-BRANCH_ID = os.getenv("BRANCH_ID", "")
-BUSINESS_DAY = os.getenv("BUSINESS_DAY", "")
 
 TIMEOUT_SECONDS = 60
 
