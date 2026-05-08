@@ -16,8 +16,8 @@ from google.oauth2.service_account import Credentials
 # CONFIG
 # =========================
 
-RISTA_BASE_URL = os.getenv("RISTA_BASE_URL", "").rstrip("/")
-RISTA_API_KEY = os.getenv("RISTA_API_KEY", "")
+RISTA_BASE_URL = os.getenv("https://api.ristaapps.com/v1", "").rstrip("/")
+RISTA_API_KEY = os.getenv("API_KEY", "")
 
 # If Rista uses a different auth header, change this section only
 RISTA_HEADERS = {
@@ -26,7 +26,7 @@ RISTA_HEADERS = {
     "Accept": "application/json"
 }
 
-GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "")
+GOOGLE_SHEET_ID = os.getenv("12oI9rtQreA0XI5eTiLZEgc2TVPm9DRgbf2TXTArEpBY", "")
 GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
 
 EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
