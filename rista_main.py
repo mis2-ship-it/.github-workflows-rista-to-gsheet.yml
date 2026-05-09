@@ -238,12 +238,22 @@ def fetch_branch_dashboard():
     )
 
     return normalize_response(data)
+# =========================================================
+# ITEM SALES DASHBOARD
+# =========================================================
 
-
-def fetch_item_sales():
+def fetch_item_sales(branch_code):
 
     params = {
+
+        "branch": branch_code,
+
+        "day": datetime.now().strftime(
+            "%Y-%m-%d"
+        ),
+
         "page": 1,
+
         "pageSize": 500
     }
 
@@ -443,7 +453,58 @@ def main():
 
     branch_df = fetch_branch_dashboard()
 
-    item_sales_df = fetch_item_sales()
+    item_sales_frames = []
+
+for _, row in branch_df.iterrows():
+
+    branch_code = row.get(
+        "branchCode",
+        ""
+    )
+
+    branch_name = row.get(
+        "branchName",
+        ""
+    )
+
+    try:
+
+        log(
+            f"Fetching sales for {branch_name}"
+        )
+
+        temp_df = fetch_item_sales(
+            branch_code
+        )
+
+        temp_df["branchName"] = (
+            branch_name
+        )
+
+        temp_df["branchCode"] = (
+            branch_code
+        )
+
+        item_sales_frames.append(
+            temp_df
+        )
+
+    except Exception as e:
+
+        log(
+            f"{branch_name} failed: {e}"
+        )
+
+if item_sales_frames:
+
+    item_sales_df = pd.concat(
+        item_sales_frames,
+        ignore_index=True
+    )
+
+else:
+
+    item_sales_df = pd.DataFrame()
 
     discount_df = fetch_discount_dashboard()
 
