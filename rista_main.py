@@ -170,6 +170,39 @@ def upload_df(
     )
 
 # =========================================================
+# FETCH BRANCH LIST
+# =========================================================
+
+def fetch_branch_list():
+
+    url = BASE_URL + "/branch/list"
+
+    log(f"Calling {url}")
+
+    response = requests.get(
+        url,
+        headers=headers(),
+        timeout=TIMEOUT
+    )
+
+    log(f"Status Code: {response.status_code}")
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    if isinstance(data, list):
+        return pd.json_normalize(data)
+
+    if isinstance(data, dict):
+
+        for k in ["data", "results", "items"]:
+            if k in data:
+                return pd.json_normalize(data[k])
+
+    return pd.DataFrame()
+
+# =========================================================
 # HELP SHEET MAPPING
 # =========================================================
 
