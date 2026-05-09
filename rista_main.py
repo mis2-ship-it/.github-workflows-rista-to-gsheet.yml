@@ -1,8 +1,6 @@
-
+# =========================================================
 # RISTA LIVE ANALYTICS DASHBOARD
-# Endpoint Used:
-# /sale/resource
-
+# =========================================================
 
 import os
 import json
@@ -10,15 +8,19 @@ import time
 import jwt
 import requests
 import pandas as pd
-import numpy as np
 import gspread
-from datetime import datetime
+import smtplib
+
 from datetime import datetime, timezone
+
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
 from google.oauth2.service_account import Credentials
 
-
+# =========================================================
 # CONFIG
-
+# =========================================================
 
 BASE_URL = "https://api.ristaapps.com/v1"
 
@@ -32,11 +34,47 @@ GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv(
     ""
 )
 
+EMAIL_HOST = os.getenv(
+    "EMAIL_HOST",
+    "smtp.gmail.com"
+)
+
+EMAIL_PORT = int(
+    os.getenv("EMAIL_PORT", "587")
+)
+
+EMAIL_USER = os.getenv(
+    "EMAIL_USER",
+    ""
+)
+
+EMAIL_PASSWORD = os.getenv(
+    "EMAIL_PASSWORD",
+    ""
+)
+
+EMAIL_TO = os.getenv(
+    "EMAIL_TO",
+    ""
+)
+
 TIMEOUT = 60
 
+# =========================================================
+# LOGGER
+# =========================================================
 
+def log(message):
+
+    ts = datetime.now(
+        timezone.utc
+    ).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    print(f"[{ts}] {message}")
+
+# =========================================================
 # AUTH
-
+# =========================================================
 
 def get_token():
 
@@ -61,21 +99,9 @@ def headers():
         "Accept": "application/json"
     }
 
-
-# LOGGER
-
-
-def log(msg):
-
-    ts = datetime.now(
-        timezone.utc
-    ).strftime("%Y-%m-%d %H:%M:%S UTC")
-
-    print(f"[{ts}] {msg}")
-
-# ---------------------------------------------
-# GSHEET
-# ---------------------------------------------
+# =========================================================
+# GOOGLE SHEETS
+# =========================================================
 
 def get_gspread_client():
 
@@ -84,17 +110,21 @@ def get_gspread_client():
         "https://www.googleapis.com/auth/drive"
     ]
 
-    creds = Credentials.from_service_account_info(
+    credentials = Credentials.from_service_account_info(
         json.loads(GOOGLE_SERVICE_ACCOUNT_JSON),
         scopes=scopes
     )
 
-    return gspread.authorize(creds)
+    return gspread.authorize(credentials)
 
 
-def get_sheet(spreadsheet, title):
+def get_or_create_worksheet(
+    spreadsheet,
+    title
+):
 
     try:
+
         return spreadsheet.worksheet(title)
 
     except Exception:
@@ -106,374 +136,183 @@ def get_sheet(spreadsheet, title):
         )
 
 
-def upload_df(spreadsheet, sheet_name, df):
+def upload_df(
+    spreadsheet,
+    sheet_name,
+    df
+):
 
-    ws = get_sheet(
+    worksheet = get_or_create_worksheet(
         spreadsheet,
         sheet_name
     )
 
-    ws.clear()
+    worksheet.clear()
 
     if df.empty:
+
         df = pd.DataFrame([{
             "message": "No Data"
         }])
 
     df = df.fillna("")
 
-    values = [df.columns.tolist()] + df.astype(str).values.tolist()
+    values = [
+        df.columns.tolist()
+    ] + df.astype(str).values.tolist()
 
-    ws.update(
+    worksheet.update(
         values=values,
         range_name="A1"
     )
 
+# =========================================================
+# API CALL
+# =========================================================
 
-# FETCH SALES RESOURCE
+def rista_get(
+    endpoint,
+    params=None
+):
 
-
-def fetch_sales_resource():
-
-    url = BASE_URL + "/sale/resource"
-
-    payload = {
-        "page": 1,
-        "pageSize": 500,
-        "fromDate": datetime.now().strftime("%Y-%m-%d"),
-        "toDate": datetime.now().strftime("%Y-%m-%d")
-    }
+    url = BASE_URL + endpoint
 
     log(f"Calling {url}")
 
-    response = requests.post(
+    response = requests.get(
         url,
         headers=headers(),
-        json=payload,
+        params=params,
         timeout=TIMEOUT
     )
 
-    log(f"Status Code: {response.status_code}")
+    log(
+        f"Status Code: {response.status_code}"
+    )
 
-    # DEBUG RESPONSE
-    print("RESPONSE =>", response.text[:1000])
+    print(
+        response.text[:1000]
+    )
 
     response.raise_for_status()
 
-    data = response.json()
+    return response.json()
+
+# =========================================================
+# NORMALIZE
+# =========================================================
+
+def normalize_response(data):
 
     if isinstance(data, dict):
 
-        for k in ["data", "results", "items"]:
-            if k in data:
-                return pd.json_normalize(data[k])
+        for key in [
+            "data",
+            "results",
+            "items",
+            "records"
+        ]:
+
+            if key in data:
+
+                return pd.json_normalize(
+                    data[key]
+                )
+
+        return pd.json_normalize(data)
 
     if isinstance(data, list):
+
         return pd.json_normalize(data)
 
     return pd.DataFrame()
 
+# =========================================================
+# FETCH DASHBOARDS
+# =========================================================
 
-# ITEM SALES DASHBOARD
+def fetch_branch_dashboard():
 
-
-def build_item_sales_dashboard(df):
-
-    possible_item_cols = [
-        "itemName",
-        "item_name",
-        "name"
-    ]
-
-    possible_sales_cols = [
-        "total",
-        "amount",
-        "netAmount",
-        "sales"
-    ]
-
-    item_col = None
-    sales_col = None
-
-    for c in possible_item_cols:
-        if c in df.columns:
-            item_col = c
-            break
-
-    for c in possible_sales_cols:
-        if c in df.columns:
-            sales_col = c
-            break
-
-    if not item_col or not sales_col:
-        return pd.DataFrame()
-
-    out = (
-        df.groupby(item_col)[sales_col]
-        .sum()
-        .reset_index()
-        .sort_values(
-            sales_col,
-            ascending=False
-        )
+    data = rista_get(
+        "/branch/list"
     )
 
-    return out
+    return normalize_response(data)
 
 
-# CANCELLATION DASHBOARD
+def fetch_item_sales():
+
+    params = {
+        "page": 1,
+        "pageSize": 500
+    }
+
+    data = rista_get(
+        "/sales/page",
+        params=params
+    )
+
+    return normalize_response(data)
 
 
-def build_cancellation_dashboard(df):
+def fetch_discount_dashboard():
 
-    cancel_cols = [
-        c for c in df.columns
-        if "cancel" in c.lower()
-    ]
+    data = rista_get(
+        "/analytics/discount/transactions"
+    )
 
-    if not cancel_cols:
-        return pd.DataFrame()
+    return normalize_response(data)
 
-    frames = []
 
-    for col in cancel_cols:
+def fetch_sales_summary():
 
-        temp = (
-            df.groupby(col)
-            .size()
-            .reset_index(name="count")
+    data = rista_get(
+        "/analytics/custom/sales/summary"
+    )
+
+    return normalize_response(data)
+
+
+def fetch_soldout_dashboard():
+
+    data = rista_get(
+        "/items/soldout/history"
+    )
+
+    if isinstance(data, dict):
+
+        return pd.json_normalize(
+            data.get("data", [])
         )
 
-        temp["metric"] = col
+    return pd.DataFrame()
 
-        frames.append(temp)
 
-    return pd.concat(
-        frames,
-        ignore_index=True
+def fetch_inventory_dashboard():
+
+    data = rista_get(
+        "/inventory/item/stock"
     )
 
-# HOURLY LIVE DASHBOARD
+    if isinstance(data, dict):
 
-def build_hourly_dashboard(df):
-
-    time_cols = [
-        "createdDate",
-        "createdAt",
-        "billDate",
-        "invoiceDate"
-    ]
-
-    detected = None
-
-    for c in time_cols:
-        if c in df.columns:
-            detected = c
-            break
-
-    if detected is None:
-        return pd.DataFrame()
-
-    df[detected] = pd.to_datetime(
-        df[detected],
-        errors="coerce"
-    )
-
-    df["hour"] = df[detected].dt.hour
-
-    amount_col = None
-
-    for c in [
-        "total",
-        "amount",
-        "netAmount"
-    ]:
-        if c in df.columns:
-            amount_col = c
-            break
-
-    if amount_col is None:
-        return pd.DataFrame()
-
-    out = (
-        df.groupby("hour")[amount_col]
-        .sum()
-        .reset_index()
-    )
-
-    return out
-
-
-# CHANNEL ANALYTICS
-
-
-def build_channel_analytics(df):
-
-    channel_cols = [
-        "channel",
-        "channelName",
-        "source"
-    ]
-
-    detected = None
-
-    for c in channel_cols:
-        if c in df.columns:
-            detected = c
-            break
-
-    if detected is None:
-        return pd.DataFrame()
-
-    out = (
-        df.groupby(detected)
-        .size()
-        .reset_index(name="orders")
-        .sort_values(
-            "orders",
-            ascending=False
+        return pd.json_normalize(
+            data.get("data", [])
         )
-    )
 
-    return out
+    return pd.DataFrame()
 
+# =========================================================
+# EMAIL HTML
+# =========================================================
 
-# INVENTORY / SOLDOUT ANALYSIS
-
-
-def build_inventory_analysis(df):
-
-    soldout_cols = [
-        c for c in df.columns
-        if "sold" in c.lower()
-        or "stock" in c.lower()
-    ]
-
-    if not soldout_cols:
-        return pd.DataFrame()
-
-    return df[soldout_cols].copy()
-
-
-# STORE SLA TRACKING
-
-
-def build_sla_tracking(df):
-
-    prep_cols = [
-        c for c in df.columns
-        if "prep" in c.lower()
-        or "sla" in c.lower()
-        or "time" in c.lower()
-    ]
-
-    if not prep_cols:
-        return pd.DataFrame()
-
-    return df[prep_cols].copy()
-
-
-# RCA ANALYSIS
-
-
-def build_rca_analysis(df):
-
-    rca = []
-
-    if "orderStatus" in df.columns:
-
-        failed = df[
-            df["orderStatus"]
-            .astype(str)
-            .str.contains(
-                "cancel",
-                case=False,
-                na=False
-            )
-        ]
-
-        rca.append({
-            "issue": "Cancelled Orders",
-            "count": len(failed)
-        })
-
-    if "stockStatus" in df.columns:
-
-        soldout = df[
-            df["stockStatus"]
-            .astype(str)
-            .str.contains(
-                "out",
-                case=False,
-                na=False
-            )
-        ]
-
-        rca.append({
-            "issue": "Out Of Stock",
-            "count": len(soldout)
-        })
-
-    return pd.DataFrame(rca)
-
-
-# SUMMARY
-
-
-def build_summary_dataframe(
-    raw_df,
-    item_sales,
-    cancellations,
-    hourly,
-    channels,
-    inventory,
-    sla,
-    rca
+def dataframe_to_html_table(
+    df,
+    max_rows=20
 ):
 
-    summary = pd.DataFrame([{
-
-        "Run Time UTC":
-            datetime.now(
-                timezone.utc
-            ).strftime("%Y-%m-%d %H:%M:%S"),
-
-        "Raw Rows":
-            len(raw_df),
-
-        "Item Sales Rows":
-            len(item_sales),
-
-        "Cancellation Rows":
-            len(cancellations),
-
-        "Hourly Rows":
-            len(hourly),
-
-        "Channel Rows":
-            len(channels),
-
-        "Inventory Rows":
-            len(inventory),
-
-        "SLA Rows":
-            len(sla),
-
-        "RCA Rows":
-            len(rca)
-
-    }])
-
-    return summary
-
-
-
-# EMAIL HTML
-
-
-def dataframe_to_html_table(df, max_rows=20):
-
     if df is None or df.empty:
+
         return "<p>No Data Available</p>"
 
     return df.head(max_rows).to_html(
@@ -484,53 +323,38 @@ def dataframe_to_html_table(df, max_rows=20):
 
 def build_email_html(
     summary_df,
-    item_sales,
-    cancellations,
-    hourly,
-    channels,
-    inventory,
-    sla,
-    rca
+    item_sales_df,
+    discount_df,
+    soldout_df,
+    inventory_df
 ):
 
     html = f"""
     <html>
 
-    <body style="font-family: Arial, sans-serif;">
+    <body style="font-family: Arial;">
 
         <h2>Rista Live Dashboard Report</h2>
 
-        <h3>Summary</h3>
+        <h3>Summary Dashboard</h3>
 
         {dataframe_to_html_table(summary_df)}
 
         <h3>Item Sales Dashboard</h3>
 
-        {dataframe_to_html_table(item_sales)}
+        {dataframe_to_html_table(item_sales_df)}
 
-        <h3>Cancellation Dashboard</h3>
+        <h3>Discount Dashboard</h3>
 
-        {dataframe_to_html_table(cancellations)}
+        {dataframe_to_html_table(discount_df)}
 
-        <h3>Hourly Dashboard</h3>
+        <h3>Soldout Dashboard</h3>
 
-        {dataframe_to_html_table(hourly)}
+        {dataframe_to_html_table(soldout_df)}
 
-        <h3>Channel Analytics</h3>
+        <h3>Inventory Dashboard</h3>
 
-        {dataframe_to_html_table(channels)}
-
-        <h3>Inventory / Soldout Analysis</h3>
-
-        {dataframe_to_html_table(inventory)}
-
-        <h3>Store SLA Tracking</h3>
-
-        {dataframe_to_html_table(sla)}
-
-        <h3>RCA Analysis</h3>
-
-        {dataframe_to_html_table(rca)}
+        {dataframe_to_html_table(inventory_df)}
 
     </body>
 
@@ -539,10 +363,9 @@ def build_email_html(
 
     return html
 
-
-
+# =========================================================
 # EMAIL SEND
-
+# =========================================================
 
 def send_email(
     subject,
@@ -550,7 +373,9 @@ def send_email(
 ):
 
     if not EMAIL_TO:
+
         log("EMAIL_TO not configured")
+
         return
 
     recipients = [
@@ -559,11 +384,15 @@ def send_email(
         if x.strip()
     ]
 
-    msg = MIMEMultipart("alternative")
+    msg = MIMEMultipart(
+        "alternative"
+    )
 
     msg["Subject"] = subject
     msg["From"] = EMAIL_USER
-    msg["To"] = ", ".join(recipients)
+    msg["To"] = ", ".join(
+        recipients
+    )
 
     msg.attach(
         MIMEText(
@@ -592,14 +421,15 @@ def send_email(
 
     log("Email Sent Successfully")
 
-
-
+# =========================================================
 # MAIN
-
+# =========================================================
 
 def main():
 
-    log("Starting Dashboard Automation")
+    log(
+        "Starting Dashboard Automation"
+    )
 
     gc = get_gspread_client()
 
@@ -608,104 +438,119 @@ def main():
     )
 
     # =====================================================
-    # FETCH RAW DATA
+    # FETCH DATA
     # =====================================================
 
-    raw_df = fetch_sales_resource()
+    branch_df = fetch_branch_dashboard()
+
+    item_sales_df = fetch_item_sales()
+
+    discount_df = fetch_discount_dashboard()
+
+    sales_summary_df = fetch_sales_summary()
+
+    soldout_df = fetch_soldout_dashboard()
+
+    inventory_df = fetch_inventory_dashboard()
 
     # =====================================================
-    # BUILD DASHBOARDS
+    # CANCELLATION DASHBOARD
     # =====================================================
 
-    item_sales = build_item_sales_dashboard(
-        raw_df
-    )
+    cancel_cols = [
+        c for c in sales_summary_df.columns
+        if "cancel" in c.lower()
+    ]
 
-    cancellations = build_cancellation_dashboard(
-        raw_df
-    )
+    if cancel_cols:
 
-    hourly = build_hourly_dashboard(
-        raw_df
-    )
+        cancellation_df = (
+            sales_summary_df[
+                cancel_cols
+            ].copy()
+        )
 
-    channels = build_channel_analytics(
-        raw_df
-    )
+    else:
 
-    inventory = build_inventory_analysis(
-        raw_df
-    )
-
-    sla = build_sla_tracking(
-        raw_df
-    )
-
-    rca = build_rca_analysis(
-        raw_df
-    )
-
-    summary_df = build_summary_dataframe(
-        raw_df,
-        item_sales,
-        cancellations,
-        hourly,
-        channels,
-        inventory,
-        sla,
-        rca
-    )
+        cancellation_df = pd.DataFrame()
 
     # =====================================================
-    # UPLOAD TO GSHEET
+    # SUMMARY DASHBOARD
+    # =====================================================
+
+    summary_df = pd.DataFrame([{
+
+        "Run Time UTC":
+            datetime.now(
+                timezone.utc
+            ).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            ),
+
+        "Total Stores":
+            len(branch_df),
+
+        "Item Sales Rows":
+            len(item_sales_df),
+
+        "Discount Rows":
+            len(discount_df),
+
+        "Sales Summary Rows":
+            len(sales_summary_df),
+
+        "Soldout Rows":
+            len(soldout_df),
+
+        "Inventory Rows":
+            len(inventory_df)
+
+    }])
+
+    # =====================================================
+    # UPLOAD TO SHEETS
     # =====================================================
 
     upload_df(
         spreadsheet,
-        "raw_data",
-        raw_df
+        "branch_dashboard",
+        branch_df
     )
 
     upload_df(
         spreadsheet,
         "item_sales_dashboard",
-        item_sales
+        item_sales_df
+    )
+
+    upload_df(
+        spreadsheet,
+        "discount_dashboard",
+        discount_df
+    )
+
+    upload_df(
+        spreadsheet,
+        "sales_summary_dashboard",
+        sales_summary_df
     )
 
     upload_df(
         spreadsheet,
         "cancellation_dashboard",
-        cancellations
+        cancellation_df
     )
 
     upload_df(
         spreadsheet,
-        "hourly_live_dashboard",
-        hourly
+        "soldout_dashboard",
+        soldout_df
     )
 
     upload_df(
         spreadsheet,
-        "channel_analytics",
-        channels
-    )
-
-    upload_df(
-        spreadsheet,
-        "inventory_soldout_analysis",
-        inventory
-    )
-
-    upload_df(
-        spreadsheet,
-        "store_sla_tracking",
-        sla
-    )
-
-    upload_df(
-        spreadsheet,
-        "rca_analysis",
-        rca
+        "inventory_dashboard",
+        inventory_df
     )
 
     upload_df(
@@ -714,21 +559,16 @@ def main():
         summary_df
     )
 
-    log("Google Sheet Upload Completed")
-
     # =====================================================
     # EMAIL REPORT
     # =====================================================
 
     html_body = build_email_html(
         summary_df,
-        item_sales,
-        cancellations,
-        hourly,
-        channels,
-        inventory,
-        sla,
-        rca
+        item_sales_df,
+        discount_df,
+        soldout_df,
+        inventory_df
     )
 
     send_email(
@@ -736,12 +576,12 @@ def main():
         html_body=html_body
     )
 
-    log("Automation Completed Successfully")
+    log(
+        "Dashboard Automation Completed Successfully"
+    )
 
-
-
-# START
-
+# =========================================================
 
 if __name__ == "__main__":
+
     main()
