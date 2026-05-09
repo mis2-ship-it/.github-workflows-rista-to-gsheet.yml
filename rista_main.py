@@ -1,6 +1,7 @@
 # =========================================================
 # RISTA LIVE ANALYTICS DASHBOARD
 # =========================================================
+print("SCRIPT STARTED")
 
 import os
 import json
@@ -433,6 +434,7 @@ def send_email(
 
 def main():
 
+    print("MAIN STARTED")
     log("Starting Dashboard Automation")
 
     gc = get_gspread_client()
@@ -579,4 +581,7 @@ def main():
     pass
 
 if __name__ == "__main__":
+
+    print("CALLING MAIN")
+
     main()
