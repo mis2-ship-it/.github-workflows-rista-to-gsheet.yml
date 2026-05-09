@@ -62,18 +62,6 @@ EMAIL_TO = os.getenv(
 TIMEOUT = 60
 
 # =========================================================
-# LOGGER
-# =========================================================
-
-def log(message):
-
-    ts = datetime.now(
-        timezone.utc
-    ).strftime("%Y-%m-%d %H:%M:%S UTC")
-
-    print(f"[{ts}] {message}")
-
-# =========================================================
 # AUTH
 # =========================================================
 
@@ -99,6 +87,20 @@ def headers():
         "Content-Type": "application/json",
         "Accept": "application/json"
     }
+
+
+# =========================================================
+# LOGGER
+# =========================================================
+
+def log(message):
+
+    ts = datetime.now(
+        timezone.utc
+    ).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    print(f"[{ts}] {message}")
+
 
 # =========================================================
 # GOOGLE SHEETS
@@ -166,6 +168,86 @@ def upload_df(
         values=values,
         range_name="A1"
     )
+
+# =========================================================
+# HELP SHEET MAPPING
+# =========================================================
+
+def get_help_sheet_mapping(
+    spreadsheet
+):
+
+    try:
+
+        ws = spreadsheet.worksheet(
+            "Help"
+        )
+
+    except Exception:
+
+        log("Help sheet not found")
+
+        return pd.DataFrame()
+
+    data = ws.get_all_records()
+
+    df = pd.DataFrame(data)
+
+    log(f"Help Sheet Rows: {len(df)}")
+
+    return df
+
+# =========================================================
+# FILTER STORES
+# =========================================================
+
+def filter_mapped_branches(
+    branch_df,
+    help_df
+):
+
+    if help_df.empty:
+        return branch_df
+
+    possible_cols = [
+        "branchCode",
+        "Branch_Code",
+        "Store Code",
+        "storeCode"
+    ]
+
+    help_col = None
+
+    for c in possible_cols:
+
+        if c in help_df.columns:
+
+            help_col = c
+            break
+
+    if help_col is None:
+
+        log("Branch code column missing in Help sheet")
+
+        return branch_df
+
+    valid_codes = (
+        help_df[help_col]
+        .astype(str)
+        .str.strip()
+        .unique()
+        .tolist()
+    )
+
+    out = branch_df[
+        branch_df["branchCode"]
+        .astype(str)
+        .isin(valid_codes)
+    ]
+
+    log(f"Mapped Stores: {len(out)}")
+
+    return out    
 
 # =========================================================
 # API CALL
@@ -431,6 +513,7 @@ def send_email(
         )
 
     log("Email Sent Successfully")
+
 
 # Main   
 
