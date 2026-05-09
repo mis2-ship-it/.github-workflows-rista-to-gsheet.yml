@@ -432,6 +432,8 @@ def send_email(
 
     log("Email Sent Successfully")
 
+# Main   
+
 def main():
 
     print("MAIN STARTED")
@@ -574,12 +576,6 @@ def main():
     log("Automation Completed Successfully")
 
 # =========================================================
-
-def get_help_sheet_mapping():
-    pass
-
-def main():
-    pass
 
 if __name__ == "__main__":
 
