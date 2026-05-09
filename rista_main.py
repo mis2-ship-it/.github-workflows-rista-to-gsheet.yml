@@ -447,64 +447,47 @@ def main():
         GOOGLE_SHEET_ID
     )
 
-    # =====================================================
-    # FETCH DATA
-    # =====================================================
+   # ==========================================
+# FETCH BRANCHES
+# ==========================================
 
-    branch_df = fetch_branch_dashboard()
+branch_df = fetch_branch_list()
 
-    item_sales_frames = []
+mapped_branch_df = filter_mapped_branches(
+    branch_df,
+    help_df
+)
 
-for _, row in branch_df.iterrows():
+# ==========================================
+# LOOP STORES
+# ==========================================
 
-    branch_code = row.get(
-        "branchCode",
-        ""
+all_item_sales = []
+
+for _, row in mapped_branch_df.iterrows():
+
+    branch_code = row["branchCode"]
+
+    branch_name = row["branchName"]
+
+    log(f"Processing {branch_name}")
+
+    item_sales_df = fetch_item_sales(
+        branch_code
     )
 
-    branch_name = row.get(
-        "branchName",
-        ""
-    )
+    item_sales_df["branchName"] = branch_name
 
-    try:
+    all_item_sales.append(item_sales_df)
 
-        log(
-            f"Fetching sales for {branch_name}"
-        )
+# ==========================================
+# FINAL DATAFRAME
+# ==========================================
 
-        temp_df = fetch_item_sales(
-            branch_code
-        )
-
-        temp_df["branchName"] = (
-            branch_name
-        )
-
-        temp_df["branchCode"] = (
-            branch_code
-        )
-
-        item_sales_frames.append(
-            temp_df
-        )
-
-    except Exception as e:
-
-        log(
-            f"{branch_name} failed: {e}"
-        )
-
-if item_sales_frames:
-
-    item_sales_df = pd.concat(
-        item_sales_frames,
-        ignore_index=True
-    )
-
-else:
-
-    item_sales_df = pd.DataFrame()
+final_item_sales_df = pd.concat(
+    all_item_sales,
+    ignore_index=True
+)
 
     discount_df = fetch_discount_dashboard()
 
