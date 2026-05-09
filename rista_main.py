@@ -1,29 +1,42 @@
+# =========================================================
+# RISTA LIVE ANALYTICS DASHBOARD
+# Endpoint Used:
+# /sale/resource
+# =========================================================
+
 import os
 import json
-import smtplib
-from datetime import datetime, timezone
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-
-import requests
-import pandas as pd
-import gspread
 import time
 import jwt
+import requests
+import pandas as pd
+import numpy as np
+import gspread
+
+from datetime import datetime, timezone
 from google.oauth2.service_account import Credentials
 
+# =========================================================
+# CONFIG
+# =========================================================
 
-# ---------------- AUTH ---------------- #
+BASE_URL = "https://api.ristaapps.com/v1"
 
 API_KEY = os.getenv("API_KEY", "")
 SECRET_KEY = os.getenv("SECRET_KEY", "")
 
-if not API_KEY:
-    raise Exception("API_KEY missing in GitHub Secrets")
+GOOGLE_SHEET_ID = "12oI9rtQreA0XI5eTiLZEgc2TVPm9DRgbf2TXTArEpBY"
 
-if not SECRET_KEY:
-    raise Exception("SECRET_KEY missing in GitHub Secrets")
+GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv(
+    "GOOGLE_SERVICE_ACCOUNT_JSON",
+    ""
+)
 
+TIMEOUT = 60
+
+# =========================================================
+# AUTH
+# =========================================================
 
 def get_token():
 
@@ -48,107 +61,21 @@ def headers():
         "Accept": "application/json"
     }
 
+#=========================================================
+# LOGGER
+#=========================================================
 
-# DEBUG
-print("API_KEY =>", API_KEY[:6] + "*****")
-print("SECRET_KEY =>", SECRET_KEY[:6] + "*****")
-print("HEADERS =>", headers())
+def log(msg):
 
-
-# ---------------- CONFIG ---------------- #
-
-GOOGLE_SHEET_ID = "12oI9rtQreA0XI5eTiLZEgc2TVPm9DRgbf2TXTArEpBY"
-
-GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv(
-    "GOOGLE_SERVICE_ACCOUNT_JSON",
-    ""
-)
-
-EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
-EMAIL_USER = os.getenv("EMAIL_USER", "")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
-EMAIL_TO = os.getenv("EMAIL_TO", "")
-
-TIMEOUT_SECONDS = 60
-
-
-
-# =========================================================
-# HELPERS
-# =========================================================
-
-def log(message):
-
-    current_ts = datetime.now(
+    ts = datetime.now(
         timezone.utc
     ).strftime("%Y-%m-%d %H:%M:%S UTC")
 
-    print(f"[{current_ts}] {message}")
+    print(f"[{ts}] {msg}")
 
-
-def parse_json_response(response):
-
-    try:
-        return response.json()
-
-    except Exception:
-        return {"raw_text": response.text}
-
-
-def normalize_to_dataframe(data):
-
-    if data is None:
-        return pd.DataFrame()
-
-    if isinstance(data, list):
-        return pd.json_normalize(data)
-
-    if isinstance(data, dict):
-
-        if "data" in data:
-            return pd.json_normalize(data["data"])
-
-        return pd.json_normalize(data)
-
-    return pd.DataFrame()
-
-
-def truncate_sheet_rows(df, max_rows=5000):
-
-    if len(df) > max_rows:
-        return df.head(max_rows)
-
-    return df
-
-
-# =========================================================
-# RISTA API
-# =========================================================
-
-def rista_get(endpoint, params=None):
-
-    url = RISTA_BASE_URL + endpoint
-
-    log(f"Calling {url}")
-
-    response = requests.get(
-        url,
-        headers=RISTA_HEADERS,
-        params=params,
-        timeout=TIMEOUT_SECONDS
-    )
-
-    log(f"Status Code: {response.status_code}")
-
-    response.raise_for_status()
-
-    return parse_json_response(response)
-
-
-# =========================================================
-# GOOGLE SHEETS
-# =========================================================
+#=========================================================
+# GSHEET
+#=========================================================
 
 def get_gspread_client():
 
@@ -157,46 +84,36 @@ def get_gspread_client():
         "https://www.googleapis.com/auth/drive"
     ]
 
-    credentials_info = json.loads(
-        GOOGLE_SERVICE_ACCOUNT_JSON
-    )
-
-    credentials = Credentials.from_service_account_info(
-        credentials_info,
+    creds = Credentials.from_service_account_info(
+        json.loads(GOOGLE_SERVICE_ACCOUNT_JSON),
         scopes=scopes
     )
 
-    return gspread.authorize(credentials)
+    return gspread.authorize(creds)
 
 
-def get_or_create_worksheet(spreadsheet, title):
+def get_sheet(spreadsheet, title):
 
     try:
-        worksheet = spreadsheet.worksheet(title)
+        return spreadsheet.worksheet(title)
 
     except Exception:
 
-        worksheet = spreadsheet.add_worksheet(
+        return spreadsheet.add_worksheet(
             title=title,
-            rows="2000",
-            cols="50"
+            rows="5000",
+            cols="100"
         )
 
-    return worksheet
 
+def upload_df(spreadsheet, sheet_name, df):
 
-def upload_dataframe_to_worksheet(
-    spreadsheet,
-    sheet_name,
-    df
-):
-
-    worksheet = get_or_create_worksheet(
+    ws = get_sheet(
         spreadsheet,
         sheet_name
     )
 
-    df = truncate_sheet_rows(df)
+    ws.clear()
 
     if df.empty:
         df = pd.DataFrame([{
@@ -205,136 +122,304 @@ def upload_dataframe_to_worksheet(
 
     df = df.fillna("")
 
-    records = [
-        df.columns.tolist()
-    ] + df.astype(str).values.tolist()
+    values = [df.columns.tolist()] + df.astype(str).values.tolist()
 
-    worksheet.clear()
-
-    worksheet.update(
-        values=records,
-        range_name="A1",
-        value_input_option="RAW"
+    ws.update(
+        values=values,
+        range_name="A1"
     )
 
-
 # =========================================================
-# HELP SHEET STORE MAPPING
-# =========================================================
-
-def get_help_sheet_mapping(spreadsheet):
-
-    worksheet = spreadsheet.worksheet("Help Sheet")
-
-    data = worksheet.get_all_records()
-
-    help_df = pd.DataFrame(data)
-
-    log(f"Help Sheet Rows: {len(help_df)}")
-
-    return help_df
-
-
-# =========================================================
-# FETCH BRANCHES
+# FETCH SALES RESOURCE
 # =========================================================
 
-def fetch_branch_list():
+def fetch_sales_resource():
 
-    result = rista_get("/branch/list")
+    url = BASE_URL + "/sale/resource"
 
-    df = normalize_to_dataframe(result)
+    log(f"Calling {url}")
 
-    return df
-
-
-# =========================================================
-# FILTER BRANCHES
-# =========================================================
-
-def filter_mapped_branches(
-    branch_df,
-    help_df
-):
-
-    if help_df.empty:
-        return branch_df
-
-    help_stores = help_df["Store_Name"].astype(str).str.strip()
-
-    branch_df["branchName"] = (
-        branch_df["branchName"]
-        .astype(str)
-        .str.strip()
+    response = requests.get(
+        url,
+        headers=headers(),
+        timeout=TIMEOUT
     )
 
-    filtered_df = branch_df[
-        branch_df["branchName"].isin(help_stores)
+    log(f"Status Code: {response.status_code}")
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    if isinstance(data, dict):
+
+        for k in ["data", "results", "items"]:
+            if k in data:
+                return pd.json_normalize(data[k])
+
+    if isinstance(data, list):
+        return pd.json_normalize(data)
+
+    return pd.DataFrame()
+
+# =========================================================
+# ITEM SALES DASHBOARD
+# =========================================================
+
+def build_item_sales_dashboard(df):
+
+    possible_item_cols = [
+        "itemName",
+        "item_name",
+        "name"
     ]
 
-    log(f"Mapped Stores: {len(filtered_df)}")
+    possible_sales_cols = [
+        "total",
+        "amount",
+        "netAmount",
+        "sales"
+    ]
 
-    return filtered_df
+    item_col = None
+    sales_col = None
 
+    for c in possible_item_cols:
+        if c in df.columns:
+            item_col = c
+            break
 
-# =========================================================
-# SOLDOUT HISTORY
-# =========================================================
+    for c in possible_sales_cols:
+        if c in df.columns:
+            sales_col = c
+            break
 
-def fetch_soldout_history(branch_name):
-
-    try:
-
-        result = rista_get(
-            "/items/soldout/history"
-        )
-
-        df = normalize_to_dataframe(result)
-
-        df["branchName"] = branch_name
-
-        return df
-
-    except Exception as e:
-
-        log(f"Soldout failed for {branch_name}: {e}")
-
+    if not item_col or not sales_col:
         return pd.DataFrame()
 
-
-# =========================================================
-# INVENTORY STOCK
-# =========================================================
-
-def fetch_inventory_stock(branch_name):
-
-    try:
-
-        result = rista_get(
-            "/inventory/item/stock"
+    out = (
+        df.groupby(item_col)[sales_col]
+        .sum()
+        .reset_index()
+        .sort_values(
+            sales_col,
+            ascending=False
         )
+    )
 
-        df = normalize_to_dataframe(result)
+    return out
 
-        df["branchName"] = branch_name
+# =========================================================
+# CANCELLATION DASHBOARD
+# =========================================================
 
-        return df
+def build_cancellation_dashboard(df):
 
-    except Exception as e:
+    cancel_cols = [
+        c for c in df.columns
+        if "cancel" in c.lower()
+    ]
 
-        log(f"Inventory failed for {branch_name}: {e}")
-
+    if not cancel_cols:
         return pd.DataFrame()
 
+    frames = []
+
+    for col in cancel_cols:
+
+        temp = (
+            df.groupby(col)
+            .size()
+            .reset_index(name="count")
+        )
+
+        temp["metric"] = col
+
+        frames.append(temp)
+
+    return pd.concat(
+        frames,
+        ignore_index=True
+    )
+
+# =========================================================
+# HOURLY LIVE DASHBOARD
+# =========================================================
+
+def build_hourly_dashboard(df):
+
+    time_cols = [
+        "createdDate",
+        "createdAt",
+        "billDate",
+        "invoiceDate"
+    ]
+
+    detected = None
+
+    for c in time_cols:
+        if c in df.columns:
+            detected = c
+            break
+
+    if detected is None:
+        return pd.DataFrame()
+
+    df[detected] = pd.to_datetime(
+        df[detected],
+        errors="coerce"
+    )
+
+    df["hour"] = df[detected].dt.hour
+
+    amount_col = None
+
+    for c in [
+        "total",
+        "amount",
+        "netAmount"
+    ]:
+        if c in df.columns:
+            amount_col = c
+            break
+
+    if amount_col is None:
+        return pd.DataFrame()
+
+    out = (
+        df.groupby("hour")[amount_col]
+        .sum()
+        .reset_index()
+    )
+
+    return out
+
+# =========================================================
+# CHANNEL ANALYTICS
+# =========================================================
+
+def build_channel_analytics(df):
+
+    channel_cols = [
+        "channel",
+        "channelName",
+        "source"
+    ]
+
+    detected = None
+
+    for c in channel_cols:
+        if c in df.columns:
+            detected = c
+            break
+
+    if detected is None:
+        return pd.DataFrame()
+
+    out = (
+        df.groupby(detected)
+        .size()
+        .reset_index(name="orders")
+        .sort_values(
+            "orders",
+            ascending=False
+        )
+    )
+
+    return out
+
+# =========================================================
+# INVENTORY / SOLDOUT ANALYSIS
+# =========================================================
+
+def build_inventory_analysis(df):
+
+    soldout_cols = [
+        c for c in df.columns
+        if "sold" in c.lower()
+        or "stock" in c.lower()
+    ]
+
+    if not soldout_cols:
+        return pd.DataFrame()
+
+    return df[soldout_cols].copy()
+
+# =========================================================
+# STORE SLA TRACKING
+# =========================================================
+
+def build_sla_tracking(df):
+
+    prep_cols = [
+        c for c in df.columns
+        if "prep" in c.lower()
+        or "sla" in c.lower()
+        or "time" in c.lower()
+    ]
+
+    if not prep_cols:
+        return pd.DataFrame()
+
+    return df[prep_cols].copy()
+
+# =========================================================
+# RCA ANALYSIS
+# =========================================================
+
+def build_rca_analysis(df):
+
+    rca = []
+
+    if "orderStatus" in df.columns:
+
+        failed = df[
+            df["orderStatus"]
+            .astype(str)
+            .str.contains(
+                "cancel",
+                case=False,
+                na=False
+            )
+        ]
+
+        rca.append({
+            "issue": "Cancelled Orders",
+            "count": len(failed)
+        })
+
+    if "stockStatus" in df.columns:
+
+        soldout = df[
+            df["stockStatus"]
+            .astype(str)
+            .str.contains(
+                "out",
+                case=False,
+                na=False
+            )
+        ]
+
+        rca.append({
+            "issue": "Out Of Stock",
+            "count": len(soldout)
+        })
+
+    return pd.DataFrame(rca)
 
 # =========================================================
 # SUMMARY
 # =========================================================
 
 def build_summary_dataframe(
-    branch_df,
-    soldout_df,
-    inventory_df
+    raw_df,
+    item_sales,
+    cancellations,
+    hourly,
+    channels,
+    inventory,
+    sla,
+    rca
 ):
 
     summary = pd.DataFrame([{
@@ -344,14 +429,29 @@ def build_summary_dataframe(
                 timezone.utc
             ).strftime("%Y-%m-%d %H:%M:%S"),
 
-        "Total Stores":
-            len(branch_df),
+        "Raw Rows":
+            len(raw_df),
 
-        "Soldout Records":
-            len(soldout_df),
+        "Item Sales Rows":
+            len(item_sales),
 
-        "Inventory Records":
-            len(inventory_df)
+        "Cancellation Rows":
+            len(cancellations),
+
+        "Hourly Rows":
+            len(hourly),
+
+        "Channel Rows":
+            len(channels),
+
+        "Inventory Rows":
+            len(inventory),
+
+        "SLA Rows":
+            len(sla),
+
+        "RCA Rows":
+            len(rca)
 
     }])
 
@@ -364,8 +464,8 @@ def build_summary_dataframe(
 
 def dataframe_to_html_table(df, max_rows=20):
 
-    if df.empty:
-        return "<p>No Data</p>"
+    if df is None or df.empty:
+        return "<p>No Data Available</p>"
 
     return df.head(max_rows).to_html(
         index=False,
@@ -375,28 +475,53 @@ def dataframe_to_html_table(df, max_rows=20):
 
 def build_email_html(
     summary_df,
-    soldout_df,
-    inventory_df
+    item_sales,
+    cancellations,
+    hourly,
+    channels,
+    inventory,
+    sla,
+    rca
 ):
 
     html = f"""
     <html>
 
-    <body style="font-family: Arial;">
+    <body style="font-family: Arial, sans-serif;">
 
-    <h2>Rista Hourly Automation</h2>
+        <h2>Rista Live Dashboard Report</h2>
 
-    <h3>Summary</h3>
+        <h3>Summary</h3>
 
-    {dataframe_to_html_table(summary_df)}
+        {dataframe_to_html_table(summary_df)}
 
-    <h3>Soldout History</h3>
+        <h3>Item Sales Dashboard</h3>
 
-    {dataframe_to_html_table(soldout_df)}
+        {dataframe_to_html_table(item_sales)}
 
-    <h3>Inventory Stock</h3>
+        <h3>Cancellation Dashboard</h3>
 
-    {dataframe_to_html_table(inventory_df)}
+        {dataframe_to_html_table(cancellations)}
+
+        <h3>Hourly Dashboard</h3>
+
+        {dataframe_to_html_table(hourly)}
+
+        <h3>Channel Analytics</h3>
+
+        {dataframe_to_html_table(channels)}
+
+        <h3>Inventory / Soldout Analysis</h3>
+
+        {dataframe_to_html_table(inventory)}
+
+        <h3>Store SLA Tracking</h3>
+
+        {dataframe_to_html_table(sla)}
+
+        <h3>RCA Analysis</h3>
+
+        {dataframe_to_html_table(rca)}
 
     </body>
 
@@ -416,6 +541,7 @@ def send_email(
 ):
 
     if not EMAIL_TO:
+        log("EMAIL_TO not configured")
         return
 
     recipients = [
@@ -431,7 +557,10 @@ def send_email(
     msg["To"] = ", ".join(recipients)
 
     msg.attach(
-        MIMEText(html_body, "html")
+        MIMEText(
+            html_body,
+            "html"
+        )
     )
 
     with smtplib.SMTP(
@@ -452,6 +581,8 @@ def send_email(
             msg.as_string()
         )
 
+    log("Email Sent Successfully")
+
 
 # =========================================================
 # MAIN
@@ -459,7 +590,7 @@ def send_email(
 
 def main():
 
-    log("Starting automation")
+    log("Starting Dashboard Automation")
 
     gc = get_gspread_client()
 
@@ -468,122 +599,140 @@ def main():
     )
 
     # =====================================================
-    # HELP SHEET
+    # FETCH RAW DATA
     # =====================================================
 
-    help_df = get_help_sheet_mapping(
-        spreadsheet
+    raw_df = fetch_sales_resource()
+
+    # =====================================================
+    # BUILD DASHBOARDS
+    # =====================================================
+
+    item_sales = build_item_sales_dashboard(
+        raw_df
     )
 
-    # =====================================================
-    # BRANCH LIST
-    # =====================================================
-
-    branch_df = fetch_branch_list()
-
-    mapped_branch_df = filter_mapped_branches(
-        branch_df,
-        help_df
+    cancellations = build_cancellation_dashboard(
+        raw_df
     )
 
-    # =====================================================
-    # FETCH DATA
-    # =====================================================
+    hourly = build_hourly_dashboard(
+        raw_df
+    )
 
-    soldout_frames = []
+    channels = build_channel_analytics(
+        raw_df
+    )
 
-    inventory_frames = []
+    inventory = build_inventory_analysis(
+        raw_df
+    )
 
-    for _, row in mapped_branch_df.iterrows():
+    sla = build_sla_tracking(
+        raw_df
+    )
 
-        branch_name = row.get(
-            "branchName",
-            ""
-        )
-
-        log(f"Processing {branch_name}")
-
-        soldout_df = fetch_soldout_history(
-            branch_name
-        )
-
-        inventory_df = fetch_inventory_stock(
-            branch_name
-        )
-
-        soldout_frames.append(
-            soldout_df
-        )
-
-        inventory_frames.append(
-            inventory_df
-        )
-
-    # =====================================================
-    # FINAL DATAFRAMES
-    # =====================================================
-
-    final_soldout_df = pd.concat(
-        soldout_frames,
-        ignore_index=True
-    ) if soldout_frames else pd.DataFrame()
-
-    final_inventory_df = pd.concat(
-        inventory_frames,
-        ignore_index=True
-    ) if inventory_frames else pd.DataFrame()
+    rca = build_rca_analysis(
+        raw_df
+    )
 
     summary_df = build_summary_dataframe(
-        mapped_branch_df,
-        final_soldout_df,
-        final_inventory_df
+        raw_df,
+        item_sales,
+        cancellations,
+        hourly,
+        channels,
+        inventory,
+        sla,
+        rca
     )
 
     # =====================================================
-    # UPLOAD TO SHEETS
+    # UPLOAD TO GSHEET
     # =====================================================
 
-    upload_dataframe_to_worksheet(
+    upload_df(
         spreadsheet,
-        "branch_list",
-        mapped_branch_df
+        "raw_data",
+        raw_df
     )
 
-    upload_dataframe_to_worksheet(
+    upload_df(
         spreadsheet,
-        "soldout_history",
-        final_soldout_df
+        "item_sales_dashboard",
+        item_sales
     )
 
-    upload_dataframe_to_worksheet(
+    upload_df(
         spreadsheet,
-        "inventory_stock",
-        final_inventory_df
+        "cancellation_dashboard",
+        cancellations
     )
 
-    upload_dataframe_to_worksheet(
+    upload_df(
         spreadsheet,
-        "summary",
+        "hourly_live_dashboard",
+        hourly
+    )
+
+    upload_df(
+        spreadsheet,
+        "channel_analytics",
+        channels
+    )
+
+    upload_df(
+        spreadsheet,
+        "inventory_soldout_analysis",
+        inventory
+    )
+
+    upload_df(
+        spreadsheet,
+        "store_sla_tracking",
+        sla
+    )
+
+    upload_df(
+        spreadsheet,
+        "rca_analysis",
+        rca
+    )
+
+    upload_df(
+        spreadsheet,
+        "summary_dashboard",
         summary_df
     )
 
+    log("Google Sheet Upload Completed")
+
     # =====================================================
-    # EMAIL
+    # EMAIL REPORT
     # =====================================================
 
     html_body = build_email_html(
         summary_df,
-        final_soldout_df,
-        final_inventory_df
+        item_sales,
+        cancellations,
+        hourly,
+        channels,
+        inventory,
+        sla,
+        rca
     )
 
     send_email(
-        "Rista Hourly Automation",
-        html_body
+        subject="Rista Live Dashboard Report",
+        html_body=html_body
     )
 
-    log("Automation completed successfully")
+    log("Automation Completed Successfully")
 
+
+# =========================================================
+# START
+# =========================================================
 
 if __name__ == "__main__":
     main()
