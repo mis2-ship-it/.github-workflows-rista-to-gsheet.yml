@@ -187,6 +187,11 @@ def fetch_branch_list():
 
     log(f"Status Code: {response.status_code}")
 
+    print("REQUEST URL:", url)
+    print("REQUEST PARAMS:", params)
+    print("REQUEST PAYLOAD:", payload if 'payload' in locals() else None)
+    print("RESPONSE:", response.text)
+
     response.raise_for_status()
 
     data = response.json()
@@ -286,31 +291,31 @@ def filter_mapped_branches(
 # API CALL
 # =========================================================
 
-def rista_get(
-    endpoint,
-    params=None
-):
+def rista_get(endpoint, params=None):
 
-    url = BASE_URL + endpoint
+    url = f"{BASE_URL}{endpoint}"
 
-    log(f"Calling {url}")
+    print(f"[{current_time()} UTC] Calling {url}")
 
     response = requests.get(
         url,
-        headers=headers(),
-        params=params,
-        timeout=TIMEOUT
+        headers=headers,
+        params=params
     )
 
-    log(
-        f"Status Code: {response.status_code}"
-    )
+    print(f"[{current_time()} UTC] Status Code: {response.status_code}")
+    print(response.text[:1000])
 
-    print(
-        response.text[:1000]
-    )
+    # SAFE ERROR HANDLING
+    try:
+        response.raise_for_status()
 
-    response.raise_for_status()
+    except Exception as e:
+        print(f"API Failed: {endpoint}")
+        print(f"Error: {e}")
+        print(response.text)
+
+        return {}
 
     return response.json()
 
@@ -347,6 +352,14 @@ def normalize_response(data):
 # FETCH DASHBOARDS
 # =========================================================
 
+from datetime import datetime
+import pandas as pd
+
+
+# =========================================================
+# BRANCH DASHBOARD
+# =========================================================
+
 def fetch_branch_dashboard():
 
     data = rista_get(
@@ -354,6 +367,8 @@ def fetch_branch_dashboard():
     )
 
     return normalize_response(data)
+
+
 # =========================================================
 # ITEM SALES DASHBOARD
 # =========================================================
@@ -381,28 +396,76 @@ def fetch_item_sales(branch_code):
     return normalize_response(data)
 
 
+# =========================================================
+# DISCOUNT DASHBOARD
+# =========================================================
+
 def fetch_discount_dashboard():
 
+    today = datetime.now().strftime(
+        "%Y-%m-%d"
+    )
+
+    params = {
+
+        "fromDate": today,
+
+        "toDate": today
+    }
+
     data = rista_get(
-        "/analytics/discount/transactions"
+        "/analytics/discount/transactions",
+        params=params
     )
 
     return normalize_response(data)
 
+
+# =========================================================
+# SALES SUMMARY DASHBOARD
+# =========================================================
 
 def fetch_sales_summary():
 
+    today = datetime.now().strftime(
+        "%Y-%m-%d"
+    )
+
+    params = {
+
+        "fromDate": today,
+
+        "toDate": today
+    }
+
     data = rista_get(
-        "/analytics/custom/sales/summary"
+        "/analytics/custom/sales/summary",
+        params=params
     )
 
     return normalize_response(data)
 
 
+# =========================================================
+# SOLDOUT DASHBOARD
+# =========================================================
+
 def fetch_soldout_dashboard():
 
+    today = datetime.now().strftime(
+        "%Y-%m-%d"
+    )
+
+    params = {
+
+        "fromDate": today,
+
+        "toDate": today
+    }
+
     data = rista_get(
-        "/items/soldout/history"
+        "/items/soldout/history",
+        params=params
     )
 
     if isinstance(data, dict):
@@ -413,6 +476,10 @@ def fetch_soldout_dashboard():
 
     return pd.DataFrame()
 
+
+# =========================================================
+# INVENTORY DASHBOARD
+# =========================================================
 
 def fetch_inventory_dashboard():
 
