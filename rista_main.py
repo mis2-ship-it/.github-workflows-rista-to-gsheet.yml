@@ -293,7 +293,7 @@ def rista_get(endpoint, params=None):
 
     url = f"{BASE_URL}{endpoint}"
 
-    print(f"[{current_time()} UTC] Calling {url}")
+    print(f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC] Calling {url}")
 
     response = requests.get(
         url,
