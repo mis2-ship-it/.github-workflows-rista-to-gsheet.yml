@@ -182,7 +182,6 @@ def fetch_branch_list():
     response = requests.get(
         url,
         headers=headers(),   # <-- add ()
-        params=params,
         timeout=TIMEOUT
     )
 
