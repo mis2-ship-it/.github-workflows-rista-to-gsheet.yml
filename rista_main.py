@@ -188,9 +188,7 @@ def fetch_branch_list():
     log(f"Status Code: {response.status_code}")
 
     print("REQUEST URL:", url)
-    print("REQUEST PARAMS:", params)
-    print("REQUEST PAYLOAD:", payload if 'payload' in locals() else None)
-    print("RESPONSE:", response.text)
+    print("RESPONSE:", response.text[:1000])
 
     response.raise_for_status()
 
@@ -218,7 +216,7 @@ def get_help_sheet_mapping(
     try:
 
         ws = spreadsheet.worksheet(
-            "Help"
+            "Help Sheet"
         )
 
     except Exception:
@@ -304,13 +302,19 @@ def rista_get(endpoint, params=None):
     )
 
     print(f"[{current_time()} UTC] Status Code: {response.status_code}")
+
+    print("REQUEST URL:", url)
+
+    if params:
+        print("REQUEST PARAMS:", params)
+
     print(response.text[:1000])
 
-    # SAFE ERROR HANDLING
     try:
         response.raise_for_status()
 
     except Exception as e:
+
         print(f"API Failed: {endpoint}")
         print(f"Error: {e}")
         print(response.text)
