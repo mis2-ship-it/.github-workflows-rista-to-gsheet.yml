@@ -845,6 +845,8 @@ def main():
         ignore_index=True
     ) if all_item_sales else pd.DataFrame()
 
+    print("FINAL SALES ROWS:", len(final_item_sales_df))
+
     # =====================================
     # OTHER DASHBOARDS
     # =====================================
