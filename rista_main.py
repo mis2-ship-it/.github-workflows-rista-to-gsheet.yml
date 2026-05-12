@@ -90,15 +90,15 @@ def headers():
 
 
 # =========================================================
-# LOGGER
+# INDIA DATE
 # =========================================================
 
-def log(message):
+def india_today():
 
-    ts = (datetime.utcnow() + pd.Timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d")
-
-    print(f"[{ts}] {message}")
-
+    return (
+        datetime.utcnow()
+        + pd.Timedelta(hours=5, minutes=30)
+    ).strftime("%Y-%m-%d")
 
 # =========================================================
 # GOOGLE SHEETS
@@ -302,7 +302,7 @@ def filter_mapped_branches(
 # =========================================================
 
 def current_time():
-    return (datetime.utcnow() + pd.Timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d")
+    return india_today()
 
 
 def rista_get(endpoint, params=None):
@@ -393,6 +393,14 @@ def fetch_branch_dashboard():
     return normalize_response(data)
 
 
+def india_today():
+
+    return (
+        datetime.utcnow()
+        + pd.Timedelta(hours=5, minutes=30)
+    ).strftime("%Y-%m-%d")
+
+
 # =========================================================
 # ITEM SALES DASHBOARD
 # =========================================================
@@ -403,8 +411,7 @@ def fetch_item_sales(branch_code):
 
         "branch": branch_code,
 
-        "day": (datetime.utcnow() + pd.Timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d")
-        ),
+        "day": india_today(),
 
         "page": 1,
 
