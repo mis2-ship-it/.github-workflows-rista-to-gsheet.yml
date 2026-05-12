@@ -792,6 +792,19 @@ def build_cancellation_dashboard(df):
 
     return cancellation_df
 
+# =========================================================
+# LOGGER
+# =========================================================
+
+def log(message):
+
+    ts = (
+        datetime.utcnow()
+        + pd.Timedelta(hours=5, minutes=30)
+    ).strftime("%Y-%m-%d %H:%M:%S IST")
+
+    print(f"[{ts}] {message}")
+
 # Main   
 
 def main():
