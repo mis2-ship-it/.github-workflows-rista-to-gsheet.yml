@@ -1,0 +1,60 @@
+name: Swiggy_Zomato_Rating_Tracker
+
+on:
+  schedule:
+    # Every 1 hour
+    - cron: '0 * * * *'
+
+  workflow_dispatch:
+
+jobs:
+  rating-tracker:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # =====================================
+      # CHECKOUT REPO
+      # =====================================
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # =====================================
+      # PYTHON SETUP
+      # =====================================
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # =====================================
+      # INSTALL LIBRARIES
+      # =====================================
+
+      - name: Install Dependencies
+        run: |
+          pip install pandas
+          pip install requests
+          pip install beautifulsoup4
+          pip install gspread
+          pip install oauth2client
+          pip install openpyxl
+
+      # =====================================
+      # CREATE JSON FILE
+      # =====================================
+
+      - name: Create Service Account JSON
+        run: |
+          echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > service_account.json
+
+      # =====================================
+      # RUN SCRIPT
+      # =====================================
+
+      - name: Run Rating Tracker
+        run: |
+          python rating_tracker.py
