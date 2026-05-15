@@ -201,24 +201,56 @@ if "statusType" in final_df.columns:
         final_df["statusType"] == "Direct"
     ]
 
-# =========================================================
-# MAP HELP SHEET
-# =========================================================
+# =========================================
+# CLEAN COLUMN NAMES
+# =========================================
 
-map_cols = [
-    "branchCode",
-    "Store Name",
-    "Region",
-    "AM Email",
-    "RM Email",
-    "AM Name",
-    "CC Mail"
+help_df.columns = help_df.columns.str.strip()
+final_df.columns = final_df.columns.str.strip()
+
+print("HELP SHEET COLUMNS:")
+print(help_df.columns.tolist())
+
+print("FINAL DF COLUMNS:")
+print(final_df.columns.tolist())
+
+# =========================================
+# HELP SHEET
+# =========================================
+
+help_ws = spreadsheet.worksheet("Help Sheet")
+
+help_data = help_ws.get_all_records()
+
+help_df = pd.DataFrame(help_data)
+
+# CLEAN HEADERS
+help_df.columns = help_df.columns.str.strip()
+
+# REMOVE INVALID BRANCHES
+help_df = help_df[
+    help_df["branchCode"].notna()
 ]
 
-map_df = help_df[map_cols].drop_duplicates()
+help_df = help_df[
+    help_df["branchCode"] != "#N/A"
+]
+
+# FINAL DF CLEAN
+final_df.columns = final_df.columns.str.strip()
+
+print("HELP COLUMNS:")
+print(help_df.columns.tolist())
+
+print("FINAL COLUMNS:")
+print(final_df.columns.tolist())
+
+# =========================================
+# MERGE
+# =========================================
 
 final_df = final_df.merge(
-    map_df,
+    help_df,
     on="branchCode",
     how="left"
 )
