@@ -48,20 +48,28 @@ creds = Credentials.from_service_account_info(
 
 client = gspread.authorize(creds)
 
-# =========================================
-# CREATE NEW SHEET
-# =========================================
+# ---------------- GOOGLE SHEET ---------------- #
 
-sheet_name = f"Rista_Full_Export_{datetime.now().strftime('%d_%b_%Y_%H_%M')}"
+spreadsheet = client.open_by_key(
+    "19z6KkVBFoLC33_wcNqVhDLyQEC2dDQ8YQE0gE38BhVg"
+)
 
-spreadsheet = client.create(sheet_name)
+print("✅ Connected to Google Sheet")
 
-worksheet = spreadsheet.sheet1
-worksheet.update_title("Master")
+# ---------------- WORKSHEET ---------------- #
 
-print("✅ Google Sheet Created")
-print("📄 Sheet URL:")
-print(spreadsheet.url)
+try:
+    ws = spreadsheet.worksheet(yesterday)
+    ws.clear()
+
+except:
+    ws = spreadsheet.add_worksheet(
+        title=yesterday,
+        rows="50000",
+        cols="200"
+    )
+
+print(f"✅ Worksheet Ready: {yesterday}")
 
 # =========================================
 # FETCH ACTIVE BRANCHES
