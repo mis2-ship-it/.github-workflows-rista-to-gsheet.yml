@@ -104,8 +104,8 @@ for row in mapping_data:
             f"https://www.swiggy.com/dapi/menu/pl?"
             f"page-type=REGULAR_MENU"
             f"&complete-menu=true"
-            f"&lat=12.9716"
-            f"&lng=77.5946"
+            f"&lat=15.3647"
+            f"&lng=75.1240"
             f"&restaurantId={s_rid}"
         )
 
