@@ -39,7 +39,23 @@ output_sheet = spreadsheet.worksheet("Rating_Output")
 # LOAD RID DATA
 # =========================================
 
-mapping_data = mapping_sheet.get_all_records()
+mapping_data = mapping_sheet.get_all_records(
+    expected_headers=[
+        "S_RID",
+        "Z_RID",
+        "Brand Name",
+        "Store Name",
+        "Region",
+        "Store Type"
+    ]
+)
+
+# FILTER ONLY COCO
+
+mapping_data = [
+    row for row in mapping_data
+    if str(row.get("Store Type", "")).strip().upper() == "COCO"
+]
 
 headers = {
     "User-Agent": "Mozilla/5.0"
