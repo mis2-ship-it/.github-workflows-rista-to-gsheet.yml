@@ -83,7 +83,7 @@ except:
 
     ws = spreadsheet.add_worksheet(
         title=sheet_name,
-        rows="5000",
+        rows="500",
         cols="100"
     )
 
@@ -147,7 +147,10 @@ for branch in branches:
 
         js = response.json()
 
-        data = js.get("data", [])
+        if isinstance(js, dict):
+            data = js.get("data", [])
+        else:
+            data = js
 
         if not data:
             continue
