@@ -22,13 +22,15 @@ scope = [
 ]
 
 creds = ServiceAccountCredentials.from_json_keyfile_name(
-    "service_account.json",
+    "GOOGLE_SERVICE_ACCOUNT_JSON",
     scope
 )
 
 client = gspread.authorize(creds)
 
-spreadsheet = client.open(SHEET_NAME)
+spreadsheet = client.open_by_key(
+    "179JtVxWo1jEBwy0DXtV6uf22WQV-z6DiZ6qvTqxeh64"
+)
 
 mapping_sheet = spreadsheet.worksheet("RID_Mapping")
 output_sheet = spreadsheet.worksheet("Rating_Output")
