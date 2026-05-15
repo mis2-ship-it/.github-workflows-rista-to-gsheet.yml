@@ -119,33 +119,33 @@ for row in mapping_data:
         if response.status_code == 200:
 
             json_data = response.json()
-
+        
             cards = json_data.get("data", {}).get("cards", [])
-
+        
             info = None
-
+    
             for card in cards:
-                try:
-                    info = card["card"]["card"]["info"]
-                    break
-                except:
-                    continue
+            try:
+                info = card["card"]["card"]["info"]
+                break
+            except:
+                continue
 
             if info:
-
+    
                 s_rating = info.get("avgRating", "")
                 s_reviews = info.get("totalRatingsString", "")
-
+        
                 print(f"✅ Swiggy Done - {store}")
 
         else:
-        print(
-            f"❌ Swiggy API Failed - "
-            f"{store} - Status: {response.status_code}"
-        )
+            print(
+                f"❌ Swiggy API Failed - "
+                f"{store} - Status: {response.status_code}"
+            )
 
-    except Exception as e:
-        print(f"❌ Swiggy Error - {store} - {e}")
+        except Exception as e:
+            print(f"❌ Swiggy Error - {store} - {e}")
 
     # =====================================
     # ZOMATO FETCH
