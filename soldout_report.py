@@ -464,7 +464,7 @@ summary_html = f"""
 msg = MIMEMultipart()
 
 msg["From"] = EMAIL_USER
-msg["To"] = ",".join(cc_mails)
+msg["To"] = ", ".join(receiver_list)
 
 msg["Subject"] = (
     f"📦 Soldout Summary - {business_day}"
