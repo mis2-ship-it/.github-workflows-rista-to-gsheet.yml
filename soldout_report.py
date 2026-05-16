@@ -83,9 +83,9 @@ print("✅ Connected Google Sheet")
 # DATE
 # =========================================================
 
-business_day = (
-    datetime.now() - timedelta(days=1)
-).strftime("%Y-%m-%d")
+business_day = datetime.now().strftime(
+    "%Y-%m-%d"
+)
 
 print("📅 Business Day:", business_day)
 
@@ -586,6 +586,24 @@ store_summary = store_summary.replace(
     "-"
 )
 
+# =========================================================
+# REPORT TABLES
+# =========================================================
+
+material_report = final_df[
+    final_df["itemType"] == "Material"
+].copy()
+
+product_report = final_df[
+    final_df["itemType"] == "Product"
+].copy()
+
+store_report = final_df.copy()
+
+# Replace blanks
+material_report = material_report.fillna("-")
+product_report = product_report.fillna("-")
+store_report = store_report.fillna("-")
 
 # =========================================================
 # PUSH SUMMARY SHEETS
@@ -631,14 +649,41 @@ for sheet_name, df_sheet in summary_dict.items():
 # =========================================================
 
 refresh_sheet("Raw_Data", final_df)
-refresh_sheet("Material_Summary", material_summary)
-refresh_sheet("Product_Summary", product_summary)
-refresh_sheet("Store_Summary", store_summary)
 
-refresh_sheet("Soldout_Report", final_df)
-refresh_sheet("Material_Report", material_report)
-refresh_sheet("Product_Report", product_report)
-refresh_sheet("Store_Report", store_report)
+refresh_sheet(
+    "Material_Summary",
+    material_summary
+)
+
+refresh_sheet(
+    "Product_Summary",
+    product_summary
+)
+
+refresh_sheet(
+    "Store_Summary",
+    store_summary
+)
+
+refresh_sheet(
+    "Soldout_Report",
+    final_df
+)
+
+refresh_sheet(
+    "Material_Report",
+    material_report
+)
+
+refresh_sheet(
+    "Product_Report",
+    product_report
+)
+
+refresh_sheet(
+    "Store_Report",
+    store_report
+)
 
 print("✅ Summary Sheets Pushed")
 
