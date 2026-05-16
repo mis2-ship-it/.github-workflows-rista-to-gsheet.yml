@@ -3,7 +3,6 @@ name: Item Soldout Report
 on:
   workflow_dispatch:
 
-
 jobs:
 
   run-script:
@@ -29,6 +28,8 @@ jobs:
           API_KEY: ${{ secrets.API_KEY }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
 
         run: |
           echo "Running Soldout script..."
