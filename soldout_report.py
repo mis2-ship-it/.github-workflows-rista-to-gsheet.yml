@@ -573,33 +573,31 @@ for store, sdf in grouped:
             MIMEText(body, "html")
         )
 
-        server = smtplib.SMTP(
-            "smtp.gmail.com",
-            587
-        )
+        for store in store_list:
 
-        server.starttls()
-
-        server.login(
-            EMAIL_USER,
-            EMAIL_PASSWORD
-        )
-
-        server.sendmail(
-            EMAIL_USER,
-            receivers,
-            msg.as_string()
-        )
-
-        server.quit()
-
-        print(f"✅ Alert Sent: {store}")
-
-    except Exception as e:
-
-        print(
-            f"❌ Alert Failed {store}:",
-            str(e)
-        )
+            try:
+        
+                server = smtplib.SMTP(
+                    "smtp.gmail.com",
+                    587
+                )
+        
+                server.starttls()
+        
+                server.login(
+                    EMAIL_USER,
+                    EMAIL_PASSWORD
+                )
+        
+                server.sendmail(
+                    EMAIL_USER,
+                    receiver_list,
+                    msg.as_string()
+                )
+        
+                server.quit()
+        
+            except Exception as e:
+                print(e)
 
 print("🎉 SOLDOUT SCRIPT COMPLETED")
