@@ -84,6 +84,12 @@ help_df = pd.DataFrame(
 )
 
 # =========================================================
+# CLEAN COLUMN NAMES
+# =========================================================
+
+help_df.columns = help_df.columns.str.strip()
+
+# =========================================================
 # REQUIRED COLUMNS
 # =========================================================
 
@@ -98,19 +104,35 @@ required_cols = [
     "Region"
 ]
 
+# Add missing columns if not present
 for c in required_cols:
 
     if c not in help_df.columns:
         help_df[c] = ""
 
 # =========================================================
+# KEEP ONLY REQUIRED COLUMNS
+# =========================================================
+
+help_df = help_df[required_cols]
+
+# =========================================================
 # FILTER ONLY COCO
 # =========================================================
+
+help_df["Ownership"] = (
+    help_df["Ownership"]
+    .astype(str)
+    .str.strip()
+    .str.upper()
+)
 
 help_df = help_df[
     help_df["Ownership"] == "COCO"
 ]
 
+print("HELP SHEET COLUMNS:")
+print(help_df.columns.tolist())
 # =========================================================
 # BRANCHES
 # =========================================================
